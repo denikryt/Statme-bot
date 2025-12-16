@@ -27,8 +27,9 @@ class StatsCommands(commands.Cog):
         self.renderer = renderer
         self._synced = False
         self._kyiv_tz = ZoneInfo("Europe/Kyiv")
-        self._weekly_task = self.bot.loop.create_task(self._weekly_refresh())
-        self._monthly_task = self.bot.loop.create_task(self._monthly_refresh())
+        self._weekly_task: Optional[asyncio.Task] = None
+        self._monthly_task: Optional[asyncio.Task] = None
+        self._schedules_started = False
         self.daily_refresh.start()
 
     def cog_unload(self):
@@ -40,6 +41,8 @@ class StatsCommands(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         await self._sync_commands()
+        if not self._schedules_started:
+            self._start_schedules()
         await self.refresh_stats_message()
 
     @app_commands.command(name="my_stats", description="Show your recent Discord activity")
@@ -89,6 +92,12 @@ class StatsCommands(commands.Cog):
     async def before_daily_refresh(self):
         await self.bot.wait_until_ready()
         await discord.utils.sleep_until(self._next_kyiv_midnight())
+
+    def _start_schedules(self) -> None:
+        # Guard against multiple on_ready calls
+        self._schedules_started = True
+        self._weekly_task = asyncio.create_task(self._weekly_refresh())
+        self._monthly_task = asyncio.create_task(self._monthly_refresh())
 
     async def _weekly_refresh(self):
         await self.bot.wait_until_ready()
