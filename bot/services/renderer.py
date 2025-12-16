@@ -17,7 +17,9 @@ class StatsRenderer:
         guild: discord.Guild,
         stats: Dict[str, int],
         reactions_7d: int,
-        top_users: List[Tuple[int, int]],
+        reactions_30d: int,
+        top_users_7d: List[Tuple[int, int]],
+        top_users_30d: List[Tuple[int, int]],
     ) -> discord.Embed:
         embed = discord.Embed(title=f"{guild.name} • Activity", colour=discord.Colour.blurple())
         embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
@@ -32,9 +34,16 @@ class StatsRenderer:
             value=f"{stats.get('messages_7d', 0):,} msgs\n{stats.get('active_7d', 0):,} active users",
             inline=True,
         )
+        embed.add_field(
+            name="Messages (30d)",
+            value=f"{stats.get('messages_30d', 0):,} msgs\n{stats.get('active_30d', 0):,} active users",
+            inline=True,
+        )
         embed.add_field(name="Reactions (7d)", value=f"{reactions_7d:,}", inline=True)
+        embed.add_field(name="Reactions (30d)", value=f"{reactions_30d:,}", inline=True)
 
-        embed.add_field(name="Top Users (7d)", value=await self._format_top_users(guild, top_users), inline=False)
+        embed.add_field(name="Top Users (7d)", value=await self._format_top_users(guild, top_users_7d), inline=False)
+        embed.add_field(name="Top Users (30d)", value=await self._format_top_users(guild, top_users_30d), inline=False)
         embed.set_footer(text="Stats start from the last bot restart")
         return embed
 
