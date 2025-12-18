@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Set, Tuple
 
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 
-from bot.db.models import DATE_FORMAT, date_key, relevant_dates, user_key
+from bot.db.models import DATE_FORMAT, date_key, user_key
 
 logger = logging.getLogger(__name__)
 
@@ -184,14 +184,15 @@ class AggregationService:
     # Read operations
     async def get_server_windows(self, guild_id: int, days: int, now: Optional[datetime] = None) -> Dict[str, int]:
         now = now or datetime.utcnow()
+        window_days = max(days, 1)
+        cutoff_date = (now - timedelta(days=window_days - 1)).date()
         server_doc = await self.servers.find_one({"_id": str(guild_id)})
         messages = 0
         reactions = 0
         active_users: Set[int] = set()
         if server_doc and "daily_stats" in server_doc:
-            for date in relevant_dates(days, now):
-                day_stats = server_doc["daily_stats"].get(date)
-                if not day_stats:
+            for day_key, day_stats in server_doc["daily_stats"].items():
+                if not self._day_within_window(day_key, cutoff_date):
                     continue
                 messages += day_stats.get("messages", 0)
                 reactions += day_stats.get("reactions", 0)
@@ -202,12 +203,17 @@ class AggregationService:
         self, guild_id: int, days: int, limit: int = 5, now: Optional[datetime] = None
     ) -> List[Tuple[int, int]]:
         now = now or datetime.utcnow()
-        cutoff_dates = set(relevant_dates(days, now))
+        window_days = max(days, 1)
+        cutoff_date = (now - timedelta(days=window_days - 1)).date()
         cursor = self.users.find({"guild_id": guild_id})
         top: List[Tuple[int, int]] = []
         async for doc in cursor:
             daily_stats = doc.get("daily_stats", {})
-            total = sum(value.get("messages", 0) for key, value in daily_stats.items() if key in cutoff_dates)
+            total = 0
+            for day_key, value in daily_stats.items():
+                if not self._day_within_window(day_key, cutoff_date):
+                    continue
+                total += value.get("messages", 0)
             if total > 0:
                 top.append((doc.get("user_id"), total))
         top.sort(key=lambda item: item[1], reverse=True)
@@ -239,9 +245,10 @@ class AggregationService:
 
     def _sum_daily(self, daily_stats: Dict[str, Dict], days: int, now: datetime) -> Dict[str, int]:
         totals = {"messages": 0, "reactions_given": 0, "reactions_received": 0}
-        for date in relevant_dates(days, now):
-            values = daily_stats.get(date)
-            if not values:
+        window_days = max(days, 1)
+        cutoff_date = (now - timedelta(days=window_days - 1)).date()
+        for day_key, values in daily_stats.items():
+            if not self._day_within_window(day_key, cutoff_date):
                 continue
             totals["messages"] += values.get("messages", 0)
             totals["reactions_given"] += values.get("reactions_given", 0)
@@ -253,6 +260,14 @@ class AggregationService:
         if len(parts) >= 3:
             return parts[1], parts[2]
         return None, None
+
+    def _day_within_window(self, day_key: str, cutoff_date: date) -> bool:
+        try:
+            day_date = datetime.strptime(day_key, DATE_FORMAT).date()
+        except ValueError:
+            logger.warning("Skipping malformed day key %s", day_key)
+            return False
+        return day_date >= cutoff_date
 
     async def get_stats_message_id(self, guild_id: int) -> Optional[int]:
         meta = await self.servers.find_one({"_id": str(guild_id)}, {"stats_message_id": 1})

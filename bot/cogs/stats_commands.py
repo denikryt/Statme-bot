@@ -127,7 +127,8 @@ class StatsCommands(commands.Cog):
             logger.warning("No guild available to refresh stats")
             return
 
-        stats_24h = await self.aggregation.get_server_windows(guild.id, 1)
+        # Use two calendar days to approximate the last 24h window with day-level buckets
+        stats_24h = await self.aggregation.get_server_windows(guild.id, 2)
         stats_7d = await self.aggregation.get_server_windows(guild.id, 7)
         stats_30d = await self.aggregation.get_server_windows(guild.id, 30)
         messages = {
@@ -153,7 +154,11 @@ class StatsCommands(commands.Cog):
 
         await self.aggregation.set_stats_channel_id(guild.id, channel.id)
 
-        message = await self._get_existing_message(channel)
+        try:
+            message = await self._get_existing_message(channel)
+        except Exception:
+            logger.exception("Aborting stats update because existing message fetch failed")
+            return
         try:
             if message:
                 await message.edit(embed=embed)
@@ -213,9 +218,10 @@ class StatsCommands(commands.Cog):
             return None
         except discord.Forbidden:
             logger.warning("Missing permissions to fetch stats message in %s", channel.id)
+            raise
         except Exception:
             logger.exception("Failed to fetch stats message %s", message_id)
-        return None
+            raise
 
     def _kyiv_now(self) -> datetime:
         return datetime.now(self._kyiv_tz)
