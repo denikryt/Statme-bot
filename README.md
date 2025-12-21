@@ -23,8 +23,12 @@ Async Discord bot that collects realtime activity metrics and publishes them in 
    ```
 2. Set environment variables:
    - `DISCORD_TOKEN` - bot token
-   - `MONGO_URI` - Mongo connection string (e.g. `mongodb://localhost:27017`)
-   - `MONGO_DB` - optional; database name (defaults to `discord_stats`)
+   - `MONGO_URI` - Mongo connection string (e.g. `mongodb://localhost:27017`); if omitted the bot will build one from the credentials below
+   - `MONGO_APP_DB` / `MONGO_DB` - optional; database name (defaults to `discord_stats`)
+   - `MONGO_APP_USERNAME` / `MONGO_APP_PASSWORD` - optional; used to build `MONGO_URI` when it is not provided
+   - `MONGO_HOST` / `MONGO_PORT` / `MONGO_AUTH_DB` / `MONGO_AUTH_SOURCE` - optional; tune the generated `MONGO_URI` (host/port default to `localhost:27017`)
+   - `MONGO_ROOT_URI` or `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD` - optional; if set the bot will create the app user on startup (idempotent)
+   - `MONGO_ROOT_AUTH_DB` - optional; defaults to `admin`, used when creating the app user
    - `MONGO_COLLECTION` - optional; default collection name to use for all stats collections
    - `MONGO_USERS_COLLECTION` / `MONGO_SERVERS_COLLECTION` / `MONGO_META_COLLECTION` - optional; override individual collection names
    - `STATS_CHANNEL_ID` - channel ID where the stats embed lives

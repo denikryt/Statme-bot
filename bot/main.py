@@ -7,7 +7,7 @@ import discord
 from discord.ext import commands
 
 from bot.config import Config, load_config
-from bot.db.mongo import Mongo
+from bot.db.mongo import Mongo, ensure_app_user
 from bot.services.aggregation import AggregationService
 from bot.services.renderer import StatsRenderer
 
@@ -34,6 +34,17 @@ async def start_bot():
     setup_logging(config.log_level)
 
     bot = create_bot(config)
+
+    # Optionally bootstrap the app user if root credentials are available
+    if config.mongo_root_uri and config.mongo_app_username and config.mongo_app_password:
+        await ensure_app_user(
+            config.mongo_root_uri,
+            config.mongo_app_username,
+            config.mongo_app_password,
+            config.mongo_db_name,
+            config.mongo_root_auth_db,
+        )
+
     mongo = Mongo(config.mongo_uri, config.mongo_db_name)
     aggregation = AggregationService(
         mongo.db(),

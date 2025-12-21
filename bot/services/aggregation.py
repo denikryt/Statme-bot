@@ -55,7 +55,6 @@ class AggregationService:
             "$inc": {"total_messages": 1, f"daily_stats.{day}.messages": 1},
             "$set": {"guild_id": guild_id, "user_id": user_id, "updated_at": now},
             "$setOnInsert": {
-                "total_messages": 0,
                 "reactions_given": 0,
                 "reactions_received": 0,
                 "created_at": now,
@@ -134,9 +133,6 @@ class AggregationService:
             "$inc": {total_field: delta, daily_field: delta},
             "$set": {"guild_id": guild_id, "user_id": user_id, "updated_at": timestamp},
             "$setOnInsert": {
-                "total_messages": 0,
-                "reactions_given": 0,
-                "reactions_received": 0,
                 "created_at": timestamp,
             },
         }

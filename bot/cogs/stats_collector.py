@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Optional
 
@@ -39,6 +39,9 @@ class StatsCollector(commands.Cog):
         self.config = config
         self.aggregation = aggregation
         self.cache = MessageAuthorCache()
+        self.user_counts: Counter[int] = Counter()
+        self._user_count_logger = logging.getLogger("user_counts")
+        self._configure_user_logger()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -49,6 +52,10 @@ class StatsCollector(commands.Cog):
         try:
             await self.aggregation.record_message(message.guild.id, message.author.id, message.created_at)
             self.cache.put(message.id, message.author.id)
+            total = self._increment_user_count(message.author.id)
+            self._user_count_logger.info(
+                "user_id=%s username=%s message_count=%s", message.author.id, message.author.name, total
+            )
         except Exception:
             logger.exception("Failed to record message for guild %s", message.guild.id)
 
@@ -106,6 +113,19 @@ class StatsCollector(commands.Cog):
         except Exception:
             logger.exception("Failed to fetch message %s for reaction event", payload.message_id)
         return None
+
+    def _configure_user_logger(self) -> None:
+        if self._user_count_logger.handlers:
+            return
+        handler = logging.FileHandler("user_counts.log", mode="w")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        self._user_count_logger.addHandler(handler)
+        self._user_count_logger.setLevel(logging.INFO)
+        self._user_count_logger.propagate = False
+
+    def _increment_user_count(self, user_id: int) -> int:
+        self.user_counts[user_id] += 1
+        return self.user_counts[user_id]
 
 
 async def setup(bot: commands.Bot):
