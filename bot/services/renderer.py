@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 import discord
 
@@ -18,8 +19,10 @@ class StatsRenderer:
         stats: Dict[str, int],
         reactions_7d: int,
         reactions_30d: int,
+        top_users_24h: List[Tuple[int, int]],
         top_users_7d: List[Tuple[int, int]],
         top_users_30d: List[Tuple[int, int]],
+        last_updated: datetime,
     ) -> discord.Embed:
         embed = discord.Embed(title=f"{guild.name} • Activity", colour=discord.Colour.blurple())
         embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
@@ -42,9 +45,13 @@ class StatsRenderer:
         embed.add_field(name="Reactions (7d)", value=f"{reactions_7d:,}", inline=True)
         embed.add_field(name="Reactions (30d)", value=f"{reactions_30d:,}", inline=True)
 
+        embed.add_field(
+            name="Top Users (24h)", value=await self._format_top_users(guild, top_users_24h), inline=False
+        )
         embed.add_field(name="Top Users (7d)", value=await self._format_top_users(guild, top_users_7d), inline=False)
         embed.add_field(name="Top Users (30d)", value=await self._format_top_users(guild, top_users_30d), inline=False)
-        embed.set_footer(text="Stats start from the last bot restart")
+        formatted_ts = last_updated.strftime("%Y-%m-%d %H:%M")
+        embed.set_footer(text=f"Last update: {formatted_ts} (Kyiv)\nStats start from the last bot restart")
         return embed
 
     async def user_embed(self, member: discord.Member, stats: Dict[str, int]) -> discord.Embed:

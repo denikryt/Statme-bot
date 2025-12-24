@@ -17,14 +17,34 @@ from bot.services.renderer import StatsRenderer
 logger = logging.getLogger(__name__)
 
 
-class StatsCommands(commands.Cog):
-    stats_group = app_commands.Group(name="stats", description="Server statistics commands")
+class StatsRefreshView(discord.ui.View):
+    """Persistent view with a button to refresh the stats embed."""
 
+    def __init__(self, cog: "StatsCommands"):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    @discord.ui.button(label="Refresh stats", style=discord.ButtonStyle.primary, custom_id="stat_refresh_button")
+    async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):  # type: ignore[override]
+        if not interaction.guild:
+            await interaction.response.send_message("Use this button inside a server.", ephemeral=True)
+            return
+        if self.cog.config.guild_id and interaction.guild.id != self.cog.config.guild_id:
+            await interaction.response.send_message("This bot is scoped to a different server.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        await self.cog.refresh_stats_message()
+        await interaction.followup.send("Statistics refreshed.", ephemeral=True)
+
+
+class StatsCommands(commands.Cog):
     def __init__(self, bot: commands.Bot, config: Config, aggregation: AggregationService, renderer: StatsRenderer):
         self.bot = bot
         self.config = config
         self.aggregation = aggregation
         self.renderer = renderer
+        self.refresh_view = StatsRefreshView(self)
+        self.bot.add_view(self.refresh_view)
         self._synced = False
         self._kyiv_tz = ZoneInfo("Europe/Kyiv")
         self._weekly_task: Optional[asyncio.Task] = None
@@ -59,9 +79,8 @@ class StatsCommands(commands.Cog):
         embed = await self.renderer.user_embed(interaction.user, stats)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @stats_group.command(name="refresh", description="Refresh the public statistics message")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def refresh(self, interaction: discord.Interaction):
+    @app_commands.command(name="stat_refresh", description="Refresh the public statistics message")
+    async def stat_refresh(self, interaction: discord.Interaction):
         if not interaction.guild:
             await interaction.response.send_message("Use this command inside a server.", ephemeral=True)
             return
@@ -72,14 +91,6 @@ class StatsCommands(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)
         await self.refresh_stats_message()
         await interaction.followup.send("Statistics refreshed.", ephemeral=True)
-
-    @refresh.error
-    async def refresh_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.errors.MissingPermissions):
-            await interaction.response.send_message("Administrator permission is required.", ephemeral=True)
-            return
-        logger.exception("Error handling /refresh command")
-        await interaction.response.send_message("Failed to refresh stats. Check logs.", ephemeral=True)
 
     @tasks.loop(hours=24)
     async def daily_refresh(self):
@@ -127,8 +138,10 @@ class StatsCommands(commands.Cog):
             logger.warning("No guild available to refresh stats")
             return
 
+        last_updated = self._kyiv_now()
+        window_days_24h = 2  # Use two calendar days to approximate the last 24h
         # Use two calendar days to approximate the last 24h window with day-level buckets
-        stats_24h = await self.aggregation.get_server_windows(guild.id, 2)
+        stats_24h = await self.aggregation.get_server_windows(guild.id, window_days_24h)
         stats_7d = await self.aggregation.get_server_windows(guild.id, 7)
         stats_30d = await self.aggregation.get_server_windows(guild.id, 30)
         messages = {
@@ -141,11 +154,12 @@ class StatsCommands(commands.Cog):
         }
         reactions_7d = stats_7d.get("reactions", 0)
         reactions_30d = stats_30d.get("reactions", 0)
+        top_users_24h = await self.aggregation.get_top_users_by_messages(guild.id, window_days_24h, limit=5)
         top_users_7d = await self.aggregation.get_top_users_by_messages(guild.id, 7, limit=5)
         top_users_30d = await self.aggregation.get_top_users_by_messages(guild.id, 30, limit=5)
 
         embed = await self.renderer.server_embed(
-            guild, messages, reactions_7d, reactions_30d, top_users_7d, top_users_30d
+            guild, messages, reactions_7d, reactions_30d, top_users_24h, top_users_7d, top_users_30d, last_updated
         )
 
         channel = await self._get_stats_channel(guild)
@@ -161,9 +175,9 @@ class StatsCommands(commands.Cog):
             return
         try:
             if message:
-                await message.edit(embed=embed)
+                await message.edit(embed=embed, view=self.refresh_view)
             else:
-                sent = await channel.send(embed=embed)
+                sent = await channel.send(embed=embed, view=self.refresh_view)
                 await self.aggregation.set_stats_message_id(guild.id, sent.id)
         except discord.Forbidden:
             logger.warning("Missing permissions to edit or send stats message in %s", channel.id)
@@ -184,10 +198,8 @@ class StatsCommands(commands.Cog):
         try:
             if self.config.guild_id:
                 guild_obj = discord.Object(id=self.config.guild_id)
-                self.bot.tree.add_command(self.stats_group, guild=guild_obj)
                 await self.bot.tree.sync(guild=guild_obj)
             else:
-                self.bot.tree.add_command(self.stats_group)
                 await self.bot.tree.sync()
             self._synced = True
             logger.info("Slash commands synced")

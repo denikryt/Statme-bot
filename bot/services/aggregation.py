@@ -210,8 +210,9 @@ class AggregationService:
                 if not self._day_within_window(day_key, cutoff_date):
                     continue
                 total += value.get("messages", 0)
-            if total > 0:
-                top.append((doc.get("user_id"), total))
+            user_id = doc.get("user_id")
+            if total > 0 and user_id is not None:
+                top.append((user_id, total))
         top.sort(key=lambda item: item[1], reverse=True)
         return top[:limit]
 

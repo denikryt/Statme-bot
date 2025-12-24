@@ -6,7 +6,7 @@ Async Discord bot that collects realtime activity metrics and publishes them in 
 - Tracks messages, reactions given/received, and per-day active users from bot launch time.
 - Rolling windows: 24h, 7d, 30d (per-day granularity).
 - Dedicated stats message that is edited in place and recreated if deleted.
-- Slash commands: `/stats refresh` (admin) and `/my_stats` (ephemeral).
+- Slash commands: `/stat_refresh` and `/my_stats` (ephemeral).
 - Automatic daily refresh of the public stats embed.
 
 ## Tech Stack

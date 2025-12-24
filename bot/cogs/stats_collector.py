@@ -13,6 +13,11 @@ from bot.services.aggregation import AggregationService
 
 logger = logging.getLogger(__name__)
 
+JOIN_MESSAGE_TYPES = {discord.MessageType.new_member}
+_guild_join_type = getattr(discord.MessageType, "guild_member_join", None)
+if _guild_join_type:
+    JOIN_MESSAGE_TYPES.add(_guild_join_type)
+
 
 class MessageAuthorCache:
     def __init__(self, max_size: int = 5000):
@@ -48,6 +53,8 @@ class StatsCollector(commands.Cog):
         if message.author.bot or not message.guild:
             return
         if self.config.guild_id and message.guild.id != self.config.guild_id:
+            return
+        if message.type in JOIN_MESSAGE_TYPES:
             return
         try:
             await self.aggregation.record_message(message.guild.id, message.author.id, message.created_at)
