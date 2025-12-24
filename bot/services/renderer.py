@@ -51,7 +51,7 @@ class StatsRenderer:
         embed.add_field(name="Top Users (7d)", value=await self._format_top_users(guild, top_users_7d), inline=False)
         embed.add_field(name="Top Users (30d)", value=await self._format_top_users(guild, top_users_30d), inline=False)
         formatted_ts = last_updated.strftime("%Y-%m-%d %H:%M")
-        embed.set_footer(text=f"Last update: {formatted_ts} (Kyiv)\nStats start from the last bot restart")
+        embed.set_footer(text=f"Last update: {formatted_ts} (Kyiv)")
         return embed
 
     async def user_embed(self, member: discord.Member, stats: Dict[str, int]) -> discord.Embed:
@@ -63,7 +63,6 @@ class StatsRenderer:
         embed.add_field(name="Reactions Given", value=f"{stats.get('reactions_given', 0):,}")
         embed.add_field(name="Reactions Given (7d)", value=f"{stats.get('reactions_given_7d', 0):,}")
         embed.add_field(name="Reactions Received", value=f"{stats.get('reactions_received', 0):,}")
-        embed.set_footer(text="Stats start from the last bot restart")
         return embed
 
     async def _format_top_users(self, guild: discord.Guild, entries: List[Tuple[int, int]]) -> str:
